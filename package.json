@@ -1,0 +1,21 @@
+{
+  "name": "somecrap",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "github-api": "^0.11.2",
+    "mocha": "^2.4.5",
+    "q": "^1.4.1",
+    "should": "^8.3.1",
+    "syntax-error": "^1.1.6"
+  },
+  "devDependencies": {
+    "custom-reporter": "file:my-modules/custom-reporter"
+  }
+}

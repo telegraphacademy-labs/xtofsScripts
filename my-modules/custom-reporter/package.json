@@ -1,0 +1,11 @@
+{
+  "name": "custom-reporter",
+  "version": "1.0.3",
+  "description": "",
+  "main": "custom-reporter.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}
