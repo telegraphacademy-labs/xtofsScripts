@@ -16,51 +16,15 @@ var mocha = new Mocha({
 });
 
 var orgRepo = github.getRepo(secrets.orgName, secrets.repo);
-var studentRepo = github.getRepo(secrets.studentUsernames[0], secrets.repo);
-
-// repo2.read('solution', 'treeMap/treeMap.test.js', function(err, data) {
-//   if (err) console.log(err);
-//   fs.writeFile('suckit.test.js', data, 'utf8', function(err, someothercrap) {
-
-//     if (err) console.log(err);
-//     repo.read('master', 'treeMap/treeMap.js', function(err, data) {
-
-//       if (err) console.log(err);
-
-//       var err = check(data, 'somefile.name');
-//       if (err) {
-//         console.error('ERROR DETECTED' + Array(62).join('!'));
-//         console.error(err);
-//         console.error(Array(76).join('-'));
-//       } else {
-//         fs.writeFile('suckit.js', data, 'utf8', function(err, someothercrap) {
-
-//           if (err) console.log(err);
-//           mocha.addFile('suckit.js');
-//           mocha.addFile('suckit.test.js');
-
-//           var foobar = console.log;
-//           console.log = function() {};
-
-//           mocha.run(function(failures) {
-//             foobar('ar gsI', arguments);
-//             process.on('exit', function() {
-//               foobar(arguments);
-//               process.exit(failures);
-//             });
-//           }, function() {
-//             console.log(arguments);
-//           });
-//         });
-//       }
-//     });
-//   });
-// });
+var mkdir = Q.nfbind(fs.mkdir);
+var unlink = Q.nfbind(fs.unlink);
+var rmdir = Q.nfbind(fs.rmdir);
 
 var writeFile = function(data, filename) {
   var deferred = Q.defer();
   console.log('write file: ', filename);
-  fs.writeFile(filename, data, 'utf8', function(err) {
+  fs.writeFile('./temp/' + filename, data, 'utf8', function(err) {
+    console.log(err);
     deferred.resolve();
   });
   return deferred.promise;
@@ -73,15 +37,107 @@ var getTestFile = function(problemName) {
     if (err) {
       console.log(err);
     }
-    writeFile(data, 'test.js').then(function() {
-      deferred.resolve(data);
-    });
+    deferred.resolve(data);
   });
 
   return deferred.promise;
 };
 
+var getStudentFile = function(studentUser, problemName) {
+  var deferred = Q.defer();
+  var studentRepo = github.getRepo(studentUser, secrets.repo);
 
-getTestFile('treeMap').then(function() {
-  console.log('finis');
-});
+  studentRepo.read('master', problemName + '/' + problemName + '.js', function(err, data) {
+
+    if (err) {
+      console.log(err);
+    }
+
+    deferred.resolve(data);
+  });
+  return deferred.promise;
+};
+
+var checkSyntax = function(data) {
+  var deferred = Q.defer();
+  var err = check(data, 'somefile.name');
+  if (err) {
+    console.error('ERROR DETECTED' + Array(62).join('!'));
+    console.error(err);
+    console.error(Array(76).join('-'));
+    deferred.reject(new Error('SYNTAX ERROR'));
+  } else {
+    deferred.resolve(data);
+  }
+  return deferred.promise;
+};
+
+var runTests = function() {
+  var deferred = Q.defer();
+  mocha.addFile('./temp/subject.js');
+  mocha.addFile('./temp/test.js');
+
+  var log = console.log;
+  console.log = function() {};
+
+  mocha.run(function(failures) {
+    log('ar gsI', arguments);
+    process.on('exit', function() {
+      log(arguments);
+      process.exit(failures);
+      console.log = log;
+      deferred.resolve();
+    });
+  }, function() {
+    log(arguments);
+    console.log = log;
+    deferred.reject('something happened');
+  });
+  return deferred.promise;
+};
+
+var toyProblemName = 'treeMap';
+mkdir('./temp/')
+  .then(function() {
+    return getTestFile(toyProblemName);
+  })
+  .then(function(data) {
+    return writeFile(data, 'test.js');
+  })
+  .then(function() {
+    return getStudentFile(secrets.studentUsernames[0], toyProblemName);
+  })
+  .then(function(data) {
+    return checkSyntax(data);
+  })
+  .then(function(data) {
+    return writeFile(data, 'subject.js');
+  })
+  .then(function() {
+    return runTests();
+  })
+  .then(function() {
+    return unlink('./temp/subject.js');
+  })
+  .then(function() {
+    return unlink('./temp/test.js');
+  })
+  .then(function() {
+    return rmdir('./temp/');
+  })
+  .then(function() {
+    console.log(arguments);
+    console.log('finis');
+  })
+  .catch(function(err) {
+    switch (err.message) {
+      case 'SYNTAX ERROR':
+        unlink('./temp/test.js')
+          .then(function() {
+            return rmdir('./temp/');
+          })
+          .done();
+        break;
+    }
+  })
+  .done();
