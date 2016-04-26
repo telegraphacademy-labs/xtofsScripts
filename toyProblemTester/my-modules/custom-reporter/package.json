@@ -1,6 +1,6 @@
 {
   "name": "custom-reporter",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "",
   "main": "custom-reporter.js",
   "scripts": {

@@ -11,9 +11,6 @@ var github = new Github({
   auth: 'basic'
 });
 
-var mocha = new Mocha({
-  reporter: 'custom-reporter'
-});
 
 var orgRepo = github.getRepo(secrets.orgName, secrets.repo);
 var mkdir = Q.nfbind(fs.mkdir);
@@ -73,18 +70,25 @@ var checkSyntax = function(data) {
 };
 
 var runTests = function() {
+
   var deferred = Q.defer();
+
+  var mocha = new Mocha({
+    reporter: 'custom-reporter'
+  });
+
   mocha.addFile('./temp/subject.js');
   mocha.addFile('./temp/test.js');
 
   var log = console.log;
-  console.log = function() {};
+  //console.log = function() {};
+  log('running tests...');
 
   mocha.run(function(failures) {
     log('ar gsI', arguments);
     process.on('exit', function() {
       log(arguments);
-      process.exit(failures);
+      //process.exit(failures);
       console.log = log;
       deferred.resolve();
     });
@@ -93,10 +97,11 @@ var runTests = function() {
     console.log = log;
     deferred.reject('something happened');
   });
+
   return deferred.promise;
 };
 
-var toyProblemName = 'treeMap';
+var toyProblemName = 'primeTester';
 mkdir('./temp/')
   .then(function() {
     return getTestFile(toyProblemName);
@@ -105,7 +110,7 @@ mkdir('./temp/')
     return writeFile(data, 'test.js');
   })
   .then(function() {
-    return getStudentFile(secrets.studentUsernames[0], toyProblemName);
+    return getStudentFile(secrets.studentUsernames[1], toyProblemName);
   })
   .then(function(data) {
     return checkSyntax(data);
@@ -130,9 +135,20 @@ mkdir('./temp/')
     console.log('finis');
   })
   .catch(function(err) {
+    console.log('ERROR$$:  '+ err);
     switch (err.message) {
       case 'SYNTAX ERROR':
         unlink('./temp/test.js')
+          .then(function() {
+            return rmdir('./temp/');
+          })
+          .done();
+        break;
+      default:
+        unlink('./temp/test.js')
+          .then(function() {
+            return unlink('./temp/subject.js');
+          })
           .then(function() {
             return rmdir('./temp/');
           })
