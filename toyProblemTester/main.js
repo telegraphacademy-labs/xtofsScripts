@@ -4,6 +4,9 @@ var Mocha = require('mocha');
 var check = require('syntax-error');
 var Q = require('q');
 var secrets = require('./secrets');
+var fork = require('child_process').fork;
+
+process.env.CUSTOM_REPORTER_TARGET_FILE = 'somecrap.txt';
 
 var github = new Github({
   username: secrets.githubUser,
@@ -18,9 +21,7 @@ var rmdir = Q.nfbind(fs.rmdir);
 
 var writeFile = function(data, filename) {
   var deferred = Q.defer();
-  //console.log('write file: ', filename);
   fs.writeFile('./temp/' + filename, data, 'utf8', function(err) {
-    console.log(err);
     deferred.resolve();
   });
   return deferred.promise;
@@ -28,7 +29,6 @@ var writeFile = function(data, filename) {
 
 var getTestFile = function(problemName) {
   var deferred = Q.defer();
-  //console.log('get test file');
   orgRepo.read('solution', problemName + '/' + problemName + '.test.js', function(err, data) {
     if (err) {
       console.log(err);
@@ -39,6 +39,7 @@ var getTestFile = function(problemName) {
 };
 
 var getStudentFile = function(studentUser, problemName) {
+  console.log('GET STUDENT REPO :', studentUser, problemName);
   var deferred = Q.defer();
   var studentRepo = github.getRepo(studentUser, secrets.repo);
   studentRepo.read('master', problemName + '/' + problemName + '.js', function(err, data) {
@@ -66,65 +67,67 @@ var checkSyntax = function(data) {
 
 var runTests = function() {
   var deferred = Q.defer();
-  var mocha = new Mocha({
-    //reporter: 'list' 
-    reporter: 'custom-reporter'
-  });
-  mocha.addFile('./temp/subject.js');
-  mocha.addFile('./temp/subject.test.js');
-  var log = console.log;
-  console.log = function() {};
-  log('running tests...');
-  process.env.CUSTOM_REPORTER_TARGET_FILE = 'somecrap.txt';
-  mocha.run(function(failures) {
-    log('argsI', arguments);
-    console.log = log;
+  var cp = fork('./cp.js', ['funk', 'show']);
+  cp.on('exit', function() {
+    console.log('PROCESS EXIT');
     deferred.resolve();
-    // process.on('exit', function() {
-    //   log('food', arguments); 
-    //   //process.exit(failures);
-    //   deferred.resolve(failures);
-    // });
-  }, function() {
-    log(arguments);
-    console.log = log;
-    deferred.reject('something happened');
   });
   return deferred.promise;
 };
 
-var toyProblemName = 'rotatedArraySearch';
+var downloadAndTestStudentCode = function(i) {
+  var deferred = Q.defer();
+
+  fs.writeFileSync(process.env.CUSTOM_REPORTER_TARGET_FILE, '');
+  var innerFunc = function() {
+    if (i < secrets.studentUsernames.length) {
+      process.env.CUSTOM_REPORTER_CURRENT_SUBJECT = secrets.studentUsernames[i];
+      getStudentFile(process.env.CUSTOM_REPORTER_CURRENT_SUBJECT, toyProblemName)
+        .then(function(data) {
+          return checkSyntax(data);
+        })
+        .then(function(data) {
+          console.log('writeFile');
+          return writeFile(data, 'subject.js');
+        })
+        .then(function() {
+          return runTests();
+        })
+        .then(function() {
+          console.log('unlink File');
+          unlink('./temp/subject.js').then(function() {
+            i++;
+            innerFunc();
+          });
+        });
+    } else {
+      deferred.resolve();
+    }
+  };
+
+  innerFunc();
+
+  return deferred.promise;
+};
+
+var toyProblemName = process.argv[2];
 mkdir('./temp/')
   .then(function() {
     return getTestFile(toyProblemName);
   })
   .then(function(data) {
     return writeFile(data, 'subject.test.js');
+  }).then(function() {
+    return downloadAndTestStudentCode(0);
   })
   .then(function() {
-    return getStudentFile(secrets.studentUsernames[6], toyProblemName);
-  })
-  .then(function(data) {
-    return checkSyntax(data);
-  })
-  .then(function(data) {
-    return writeFile(data, 'subject.js');
-  })
-  .then(function() {
-    return runTests();
-  })
-  .then(function() {
-    //jconsole.log('eat shit');
-    return unlink('./temp/subject.js');
-  })
-  .then(function() {
+    console.log('UNLINK THE TEST FILE!!!!!!!(?)');
     return unlink('./temp/subject.test.js');
   })
   .then(function() {
     return rmdir('./temp/');
   })
   .then(function() {
-    //console.log(arguments);
     console.log('finis');
   })
   .catch(function(err) {
